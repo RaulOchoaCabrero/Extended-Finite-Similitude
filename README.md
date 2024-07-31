@@ -1,3 +1,4 @@
+# Code for the Implementation of the Extended Finite Similitude Approach
 Python code for the implementation of the novel Finite Similitude scaling approach in the field of biomechanics and finance, among other fields.
 
 Version 1.0
