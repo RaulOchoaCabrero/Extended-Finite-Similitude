@@ -6,7 +6,7 @@ Created on Mon Nov  7 09:42:00 2022
 
 Extended Finite Similitude in Finance: Size Effects
 
-Copyright: Copyright (c) 2020 Raul Ochoa Cabrero
+Copyright: Copyright (c) 2022 Raul Ochoa Cabrero
 """
 
 import math
