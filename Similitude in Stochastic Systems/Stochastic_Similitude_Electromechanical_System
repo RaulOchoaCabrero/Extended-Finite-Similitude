@@ -1,0 +1,403 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Dec 23 13:54:42 2024
+
+@author: Raul Ochoa Cabrero
+
+The following program implements a finite similitude approach to simulate the scaling of a electromechanical stochastic system.
+
+"""
+
+# Required Libraries
+import math
+import sympy
+from sympy import symbols
+import numpy as np
+import csv
+import random
+import pandas as pd
+import matplotlib.pyplot as plt
+import plotly.express as px
+from plotly.offline import plot
+import plotly.graph_objs as go
+import plotly as py
+from matplotlib.collections import LineCollection
+from matplotlib.patches import PathPatch
+from matplotlib.path import Path
+np.set_printoptions(precision=4)
+
+# Field Parameters and Variables
+
+beta = 1                #index 0, length-scale parameter
+beta1 = 1 / 2           #index 1, trial space 1 length scale
+T0 = 0                  #index 2, initial time
+B = 3.53                #index 4, coupling term
+R = 12                  #index 5, resistance
+kcoeff = 10000          #index 6, spring coefficient
+L = 0.000155761         #index 7, inductance
+mass = 0.4              #index 8, mass
+epsilon = 1             #index 9, amplitude and scaling parameter for Brownian term
+Xamp = 0.0003             #index 14, displacement amplitude
+#C = 0.099              capacitance 
+X1_0 = 0.099            #index 10, initial displacement
+X2_0 = 1                #index 11, intial velocity
+X3_0 = 0                #index 12, intial charge
+X4_0 = 0                #index 13, initial current
+Tend = 100 / (math.sqrt(kcoeff / mass))     #index 3, final time
+
+#the variables above are not needed as long as you define the array below
+
+Q = np.array([beta , beta1 , T0 , Tend , B , R , kcoeff, L, mass , epsilon , X1_0 , X2_0, X3_0 , X4_0 , Xamp])  #Array of quantities
+
+# ScaledQ is a function where the fields and parameters are scaled to the appropriate \Omega_{beta} space in which the numerical calculations take place, Q
+
+def ScaledQ(Q):                          
+    alpha_rho = Q[0] ** 3                               #scaling parameter for mass selected as beta^3
+    #alpha_rho1 = Q[1] ** 3
+    g = Q[0]                                            #scaling parameter for time selected as beta
+    g1 = Q[1]
+    alpha_G = Q[0] ** 3                                 #scaling parameter for charge selected as beta^3
+    #alpha_G1 = Q[1] ** 3
+    X1_beta1 = Q[10] * Q[1]                             #this is a free parameter chosen as 2/3*L(1)
+    X2_beta1 = Q[11] * Q[1] / g1
+    #R_beta1 = 12
+    #L_beta1 = 0.0000775
+    Xamp_beta1 = Q[14] * Q[1]                           #scaling parameter of displacement amplitude
+    T0 = Q[2] * g                                       #scaling of initial conditions for t
+    Tend = Q[3] * g
+    kcoeff = alpha_rho * g ** (-2) * Q[6]               #scaling of spring coefficient
+    mass = alpha_rho * Q[8]                             #scaling of mass
+    epsilon = Q[9] * g                                  #scaling of epsilon/Browninan term dB
+    X1 = Q[10] * (beta - beta1) / (1 - beta1) + X1_beta1 * (1 - beta) / (1 - beta1)                     #scaling of displacement (first-order)
+    X2 = Q[11] * (beta - beta1) / (1 - beta1) / g + X2_beta1 * (1 - beta) / (1 - beta1) / g * g1        #scaling of velocity
+    X3 = Q[12] / alpha_G / g                            #scaling of charge (zeroth-order)
+    X4 = Q[13] / alpha_G 
+    B = Q[4] * Q[0]                                     #scaling of coupling term
+    R = Q[5]                                            #scaling of resistance (dimensionless)
+    L = Q[7] * Q[0]                                     #scaling of inductance
+    Xamp = Q[14] * (beta - beta1) / (1 - beta1) + Xamp_beta1 * (1 - beta) / (1 - beta1)                 #scaling of displacement amplitude
+    return(np.array([T0 , Tend , B , R , kcoeff , L , mass , epsilon , X1 , X2 , X3 , X4 , Xamp]))
+
+# a and b are functions defining the deterministic and stochastic vectors (respectively) utilised in the numerical methods to obtain the stocahstic realisations
+
+def a(X1,X2,X3,X4,t):       #deterministic vector
+    a = np.zeros(4)
+    a[0] = X2 
+    a[1] = - kcoeff / mass * X1 + B / mass *X4 + kcoeff / mass * Xamp * math.sin(t / beta)   
+    a[2] = X4
+    a[3] = - R / L * X4 - B / L * X2 + B / L * Xamp * math.cos(t / beta)
+    return(a)
+
+def b(X1,X2,X3,X4,t):       #stochastic vector
+    b = np.zeros(4)
+    b[0] = 0
+    b[1] = kcoeff / mass * Xamp * epsilon
+    b[2] = 0
+    b[3] = B / L * Xamp * epsilon
+    return(b)
+
+T0 = ScaledQ(Q)[0]
+Tend = ScaledQ(Q)[1]
+B = ScaledQ(Q)[2]
+R = ScaledQ(Q)[3]
+kcoeff = ScaledQ(Q)[4]
+L = ScaledQ(Q)[5]
+mass = ScaledQ(Q)[6]
+epsilon = ScaledQ(Q)[7]
+X1_0 = ScaledQ(Q)[8]
+X2_0 = ScaledQ(Q)[9]
+X3_0 = ScaledQ(Q)[10]
+X4_0 = ScaledQ(Q)[11]
+Xamp = ScaledQ(Q)[12]
+
+Tsteps = 300                                #time step plot
+T = np.zeros(Tsteps + 1)                    #time array of the tbetas
+T[0] = T0
+T[300] = Tend                                  
+Tbeta = (T[300] - T[0]) / Tsteps
+n = 200                                             #number of samples 
+n1 = 100                                            #time step Euler
+X1 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1])        #displacement u
+X2 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1])        #velocity v
+X3 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1]) 
+X4 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1]) 
+
+for r in range(n):                              #multiple samples loop
+    X1[r,0,0] = X1_0                            #initial u
+    X2[r,0,0] = X2_0                            #initial v 
+    X3[r,0,0] = X3_0 
+    X4[r,0,0] = X4_0                                
+    for k in range(Tsteps):                     #loop for plot
+        T[k + 1] = T[k] + Tbeta
+        dt = (T[k + 1] - T[k]) / n1
+        t = np.zeros(n1 + 1)
+        t[0] = T[k]
+        for i in range(n1):                     #Euler loop (finite differences)
+                t[i + 1] = t[i] + dt
+                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] + b(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] * math.sqrt(dt) * random.normalvariate(0,1)
+                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] + b(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] * math.sqrt(dt) * random.normalvariate(0,1)
+                X3[r,k,i + 1] = X3[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[2] + b(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[2] * math.sqrt(dt) * random.normalvariate(0,1)
+                X4[r,k,i + 1] = X4[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[3] + b(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[3] * math.sqrt(dt) * random.normalvariate(0,1)
+    
+        X1[r,k+1,0] = X1[r,k,n1]
+        X2[r,k+1,0] = X2[r,k,n1]
+        X3[r,k+1,0] = X3[r,k,n1]
+        X4[r,k+1,0] = X4[r,k,n1]
+
+
+#no stochastic term
+for r in range(n):                              #multiple samples loop
+    X1[r,0,0] = X1_0                            #initial u
+    X2[r,0,0] = X2_0                            #initial v 
+    X3[r,0,0] = X3_0 
+    X4[r,0,0] = X4_0                                
+    for k in range(Tsteps):                     #loop for plot
+        T[k + 1] = T[k] + Tbeta
+        dt = (T[k + 1] - T[k]) / n1
+        t = np.zeros(n1 + 1)
+        t[0] = T[k]
+        for i in range(n1):                     #Euler loop (finite differences)
+                t[i + 1] = t[i] + dt
+                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] 
+                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] 
+                X3[r,k,i + 1] = X3[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[2] 
+                X4[r,k,i + 1] = X4[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[3] 
+    
+        X1[r,k+1,0] = X1[r,k,n1]
+        X2[r,k+1,0] = X2[r,k,n1]
+        X3[r,k+1,0] = X3[r,k,n1]
+        X4[r,k+1,0] = X4[r,k,n1]
+    
+# save results in csv files
+
+df1=pd.DataFrame(X1[:,:,0].T)
+df1.to_csv('FullScaleCase2gX1.csv', encoding='utf-8')
+df2=pd.DataFrame(X2[:,:,0].T)
+df2.to_csv('FullScaleCase2gX2.csv', encoding='utf-8')
+df3=pd.DataFrame(X3[:,:,0].T)
+df3.to_csv('FullScaleCase2gX3.csv', encoding='utf-8')
+df4=pd.DataFrame(X4[:,:,0].T)
+df4.to_csv('FullScaleCase2gX4.csv', encoding='utf-8')
+
+#load csv files
+
+df1 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleCase2gX1.csv') #'OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleX1Part1.csv'
+arr1=np.array(df1)
+arr1 = arr1[:,1:]
+df2 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/TrialScale1Case2gX1.csv')
+arr2=np.array(df2)
+arr2 = arr2[:,1:]
+df3 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/TrialScale2Case2gX1.csv')
+arr3=np.array(df3)
+arr3 = arr3[:,1:]
+
+# Analysis of the error between the full scale space and the space projection of the two trial spaces
+
+Err = arr1 - (arr3 - arr2 * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))                              #error between stochastic realisations
+ErrDet = arr1[:,500] - (arr3[:,500] - arr2[:,500] * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))      #error between deterministic parts
+
+# Statistical analysis of errors
+
+np.mean(Err)
+np.mean(np.abs(Err))
+max(np.max(Err),abs(np.min(Err)))
+sd = np.std(Err)
+(Err > 4).sum() / len(Err)
+(Err > 20).sum() / (np.shape(Err)[0] * np.shape(Err)[1])
+
+#means and variance
+
+err_mean = np.mean(arr1[:,:500], axis=1) - arr1[:,500]
+np.max(abs(err_mean))
+np.std(err_mean)
+std_sim = np.std(arr1[:,:499],axis=1)
+np.mean(std_sim)
+np.std(std_sim)
+
+# Projection of the two trial spaces
+
+proj_fs = (arr3 - arr2 * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))
+
+# Error between the deterministic plot and the mean of the realisations in each time step.
+
+err_mean_fs = np.mean(arr1[:,:500], axis=1) - arr1[:,500]
+err_mean_ts1 = np.mean(arr2[:,:500], axis=1) - arr2[:,500]
+err_mean_ts2 = np.mean(arr3[:,:500], axis=1) - arr3[:,500]
+err_mean_proj = np.mean(proj_fs[:,:500], axis=1) - proj_fs[:,500]
+
+# Standard deviation of the spaces and the full scale projection
+
+std_sim_fs = np.std(arr1[:,:500],axis=1)
+std_sim_ts1 = np.std(arr2[:,:500],axis=1)
+std_sim_ts2 = np.std(arr3[:,:500],axis=1)
+std_sim_proj = np.std(proj_fs[:,:500],axis=1)
+
+# Output of the results, rows are each space and columns are mean absolute error, max abs error, std of errors, mean of standard deviation of realisations and std of the array of std
+
+results = np.array([[np.mean(abs(err_mean_fs)),np.max(abs(err_mean_fs)),np.std(err_mean_fs),np.mean(std_sim_fs),np.std(std_sim_fs)],
+ [np.mean(abs(err_mean_ts1)),np.max(abs(err_mean_ts1)),np.std(err_mean_ts1),np.mean(std_sim_ts1),np.std(std_sim_ts1)],
+  [np.mean(abs(err_mean_ts2)),np.max(abs(err_mean_ts2)),np.std(err_mean_ts2),np.mean(std_sim_ts2),np.std(std_sim_ts2)],
+   [np.mean(abs(err_mean_proj)),np.max(abs(err_mean_proj)),np.std(err_mean_proj),np.mean(std_sim_proj),np.std(std_sim_proj)]])
+
+# Analysis of variance on X2, i.e., velocity
+
+dT_fs = ScaledQ(Q)[1] / 301 # time is 0.6324555320336758 for EM 100 for spring-damper
+dT_ts1 = ScaledQ(Q)[1] / 301
+dT_ts2 = ScaledQ(Q)[1] / 301
+vel_fs = np.zeros((300,500))
+vel_ts1 = np.zeros((300,500))
+vel_ts2 = np.zeros((300,500))
+
+# do each space separately using the function ScaledQ for consistency
+for j in range(500):
+  for i in range(300):
+    vel_fs[i,j] = (arr1[i,j] - arr1[i+1,j]) / dT_fs
+    vel_ts1[i,j] = (arr2[i,j] - arr2[i+1,j]) / dT_ts1
+    vel_ts2[i,j] = (arr3[i,j] - arr3[i+1,j]) / dT_ts2
+    
+std_vel_fs = np.std(arr1[:,:],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+np.mean(std_vel_fs)
+std_vel_ts1 = np.std(vel_ts1[:,:500],axis=1)
+np.mean(std_vel_ts1)
+std_vel_ts2 = np.std(vel_ts2[:,:500],axis=1)
+np.mean(std_vel_ts2)
+var_fs = ((ScaledQ(Q)[4] / ScaledQ(Q)[6] * ScaledQ(Q)[12] * ScaledQ(Q)[7]) ** 2 ) * (ScaledQ(Q)[1] / 301)
+math.sqrt(var_fs)
+var_ts1 = ((ScaledQ(Q)[4] / ScaledQ(Q)[6] * ScaledQ(Q)[12] * ScaledQ(Q)[7]) ** 2 ) * (ScaledQ(Q)[1] / 301)
+math.sqrt(var_ts1)
+var_ts2 = ((ScaledQ(Q)[4] / ScaledQ(Q)[6] * ScaledQ(Q)[12] * ScaledQ(Q)[7]) ** 2 ) * (ScaledQ(Q)[1] / 301)
+math.sqrt(var_ts2)
+
+#quickly check variance vs std
+
+df1=pd.DataFrame(X1[:,:,0].T)    
+arr1=np.array(df1) 
+df2=pd.DataFrame(X2[:,:,0].T)    
+arr2=np.array(df2) 
+df3=pd.DataFrame(X3[:,:,0].T)    
+arr3=np.array(df3) 
+df4=pd.DataFrame(X4[:,:,0].T)    
+arr4=np.array(df4)
+std_vel_fs = np.std(arr2[:,:],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+np.mean(std_vel_fs)
+
+#For X4
+
+var_fs = ((ScaledQ(Q)[2] / ScaledQ(Q)[5] * ScaledQ(Q)[12] * ScaledQ(Q)[7]) ** 2 ) * (ScaledQ(Q)[1] / 301)
+math.sqrt(var_fs)
+var_ts1 = ((ScaledQ(Q)[2] / ScaledQ(Q)[5] * ScaledQ(Q)[12] * ScaledQ(Q)[7]) ** 2 ) * (ScaledQ(Q)[1] / 301)
+math.sqrt(var_ts1)
+var_ts2 = ((ScaledQ(Q)[2] / ScaledQ(Q)[5] * ScaledQ(Q)[12] * ScaledQ(Q)[7]) ** 2 ) * (ScaledQ(Q)[1] / 301)
+math.sqrt(var_ts2)
+
+
+# Plots
+
+Tp = np.linspace(0,300,301)
+fig = px.line(df1, x=Tp, y='500') #deterministic plot
+plot(fig)
+
+sample1 = random.randint(0,499); sample2= random.randint(0,499); sample3 = random.randint(0,499)
+T1 = np.linspace(0,100,301)
+T2 = np.linspace(0,100 * 2 / 3, 301)
+T3 = np.linspace(0,100 / 3, 301)
+A1 = np.stack((T1, arr1[:,sample1]), axis=1)
+A2 = np.stack((T2, arr2[:,sample2]), axis=1)
+A3 = np.stack((T3, arr3[:,sample3]), axis=1)
+collection = [A1, A2, A3]
+#df = pd.DataFrame(collection)
+#df = pd.DataFrame.transpose(df)
+fig, ax = plt.subplots(figsize=(10,5))
+# set axes limits manually because Collections do not take part in autoscaling
+ax.set_xlim(0, 100)
+ax.set_ylim(-65, 100)
+#ax.set_aspect("equal")  # to make the arcs look circular
+
+# create a LineCollection with the half-circles
+# its properties can be set per line by passing a sequence (here used for *colors*)
+# or they can be set for all lines by passing a scalar (here used for *linewidths*)
+line_collection = LineCollection(collection, colors=['b','r','g'], linestyle=['solid','dashed','dotted'],linewidths=[1,1.5,1.7])
+ax.add_collection(line_collection)
+plt.savefig('Full Trial 1 and Trial 2 samples.png', dpi=300)
+plt.show()
+
+#error bar plot
+x = T1
+y = arr1[:,500]
+fig, ax = plt.subplots()
+ax.plot(x, y, "k")
+
+fs_aprox = (arr3 - arr2 * ((1 - 1 / 3) / (1 - 2 / 3))) / ((1 / 3 - 2 / 3) / (1 - 2 / 3))
+arcs = [np.column_stack([T1, fs_aprox[:,r]]) for r in range(0,500)]
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.set_xlim(0, 100)
+ax.set_ylim(-65, 100)
+line_collection = LineCollection(arcs, array=range(0,500), cmap='copper', alpha=0.2)
+ax.add_collection(line_collection)
+ax.plot(T1, arr1[:,sample3], color='blue')
+
+fig.colorbar(line_collection, label="ts1 + ts2 realizations")
+#ax.set_title("Line Collection with mapped colors")
+plt.savefig('FsvsTs1Ts2ralisations.png', dpi=300)
+plt.show()
+
+B1 = np.stack((T1, arr1[:,sample1] + sd), axis=1)
+B2 = np.stack((T1, arr1[:,sample1] - sd), axis=1)
+B3 = np.stack((T1, arr1[:,sample1] + 2 * sd), axis=1)
+B4 = np.stack((T1, arr1[:,sample1] - 2 * sd), axis=1)
+
+collection = [ B1, B2, B3, B4]
+fig, ax = plt.subplots(figsize=(10,5))
+ax.set_xlim(0, 100)
+ax.set_ylim(-65, 100)
+line_collection = LineCollection(collection, colors=['r','r','g','g'], linestyle='dashed',linewidths=[1.5,1.5,0.8,0.8])
+ax.add_collection(line_collection)
+ax.plot(T1, arr1[:,sample1], color='blue')
+plt.savefig('FullScaleSampleWithSDBands.png', dpi=300)
+plt.show()
+
+sample1 = random.randint(0,499); sample2= random.randint(0,499); sample3 = random.randint(0,499)
+T = np.linspace(0,300,301)
+A1 = np.stack((T, arr1[:,sample1]), axis=1)
+A2 = np.stack((T, arr1[:,sample2]), axis=1)
+A3 = np.stack((T, arr1[:,sample3]), axis=1)
+A4 = np.stack((T, arr1[:,206]), axis=1)
+A5 = np.stack((T, arr1[:,500]), axis=1)
+A6 = np.stack((T,arr1[:,500] + std_sim1),axis=1)
+A7 = np.stack((T,arr1[:,500] - std_sim1),axis=1)
+collection = [A1, A2, A3, A4, A5, A6, A7]
+#df = pd.DataFrame(collection)
+#df = pd.DataFrame.transpose(df)
+fig, ax = plt.subplots(figsize=(10,5))
+# set axes limits manually because Collections do not take part in autoscaling
+ax.set_xlim(0, 300)
+ax.set_ylim(-75, 100)
+#ax.set_aspect("equal")  # to make the arcs look circular
+
+# create a LineCollection with the half-circles
+# its properties can be set per line by passing a sequence (here used for *colors*)
+# or they can be set for all lines by passing a scalar (here used for *linewidths*)
+line_collection = LineCollection(collection, colors=['r','r','r','r','b','g','g'], linestyle=['dashed','dashed','dashed','dashed','solid','dotted','dotted'],linewidths=[1.5,1.5,1.5,1.5,1,1.7,1.7])
+ax.add_collection(line_collection)
+plt.savefig('Full Scale Means and Variance.png', dpi=300)
+plt.show()
+
+x = T
+y = arr1[:,500]
+fig, ax = plt.subplots()
+ax.plot(x, y, "k")
+
+arcs = [np.column_stack([T, arr1[:,r]]) for r in range(0,500)]
+fig, ax = plt.subplots(figsize=(10, 5))
+ax.set_xlim(0, 300)
+ax.set_ylim(-65, 100)
+line_collection = LineCollection(arcs, array=range(0,500), cmap='copper', alpha=0.2)
+ax.add_collection(line_collection)
+ax.plot(T, arr1[:,500] + std_sim1, color='black', linestyle='dashed')
+ax.plot(T, arr1[:,500] - std_sim1, color='black', linestyle='dashed')
+ax.plot(T, arr1[:,500], color='blue')
+
+fig.colorbar(line_collection, label="full scale realizations")
+#ax.set_title("Line Collection with mapped colors")
+plt.savefig('Full Scale Means and Variance.png', dpi=300)
+plt.show()
