@@ -119,8 +119,12 @@ for r in range(n):                              #multiple samples loop
         t[0] = T[k]
         for i in range(n1):                     #Euler loop (finite differences)
                 t[i + 1] = t[i] + dt
-                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] + b(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] * math.sqrt(dt) * random.normalvariate(0,1)
-                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] + b(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] * math.sqrt(dt) * random.normalvariate(0,1)
+                if X2[r,k,i] >= 0:
+                    sign = 1
+                else:
+                    sign = -1
+                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],t[i])[0] + b(X1[r,k,i],X2[r,k,i],t[i])[0] * math.sqrt(dt) * random.normalvariate(0,1)
+                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],t[i])[1] + b(X1[r,k,i],X2[r,k,i],t[i])[1] * math.sqrt(dt) * random.normalvariate(0,1)
     
         X1[r,k+1,0] = X1[r,k,n1]
         X2[r,k+1,0] = X2[r,k,n1]
@@ -136,8 +140,12 @@ for r in range(n):                              #multiple samples loop
         t[0] = T[k]
         for i in range(n1):                     #Euler loop (finite differences)
                 t[i + 1] = t[i] + dt
-                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] 
-                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] 
+                if X2[r,k,i] >= 0:
+                    sign = 1
+                else:
+                    sign = -1
+                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],t[i])[0] 
+                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],t[i])[1] 
   
         X1[r,k+1,0] = X1[r,k,n1]
         X2[r,k+1,0] = X2[r,k,n1]
