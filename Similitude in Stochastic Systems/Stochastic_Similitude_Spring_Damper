@@ -41,7 +41,7 @@ epsilon = 1           #index 9, amplitude and scaling parameter for Brownian ter
 X1_0 = 100            #index 10, initial displacement
 X2_0 = 0              #index 11, initial velocity
 gravity = 9.81        #index 12, gravity acceleration
-F0 = 200              #index 13, initial value of the forcing term
+F0 = 80              #index 13, initial value of the forcing term
 
 #the variables above are not needed as long as you define the array below
 
@@ -51,28 +51,29 @@ Q = np.array([beta , beta1 , T0 , Tend , kcoeff , c , mass , mu , theta , epsilo
 
 def ScaledQ(Q):                          
     alpha_rho = pow(Q[0] , 3)                           #scaling parameter for mass selected as beta^3
-    alpha_rho1 = pow(Q[1] , 3)
+    #alpha_rho1 = pow(Q[1] , 3)
     g = Q[0]                                            #scaling parameter for time selected as beta (beta ** 2 for firsrt order epsilon)
     g1 = Q[1]
     X1_beta1 = Q[10] * Q[1]                             #scaling of displacement for ts1 selected as beta * X(1)
     X2_beta1 = Q[11] * Q[1] / g1                        #scaling of velicity for ts1
     acc_beta1 = Q[12] * Q[1] * pow(g1 , -2)             #scaling of acceleration for ts1
-    F0_beta1 = Q[13] * Q[1] * pow(g1 , -2) * alpha_rho1             #scaling of the forcing term F0 for ts1
+    #F0_beta1 = Q[13] * Q[1] * pow(g1 , -2) * alpha_rho1             #scaling of the forcing term F0 for ts1
     T0 = Q[2] * g                                       #scaling of initial conditions for t
     Tend = Q[3] * g
+    e_beta1 = (g1 ** 2) * Q[9]
     kcoeff = alpha_rho * pow(g , -2) * Q[4]             #scaling of spring coefficient
     c = alpha_rho / g * Q[5]                            #scaling of stiffness coefficient
     mass = alpha_rho * Q[6]                             #scaling of mass
     mu = Q[7]                                           #scaling of friction coefficient
     theta = Q[8]                                        #scaling of angle
-    epsilon = Q[9] * g                                  #scaling of epsilon/Browninan term dB
-    # if using first order epsilon then epsilon = Q[9] * (beta - beta1) / (1 - beta1) + e_beta1 * (1 - beta) / (1 - beta1) * g
+    #epsilon = Q[9] * g                                  #scaling of epsilon/Browninan term dB
+    epsilon = Q[9] * (g - g1) / (1 - g1) + e_beta1 * (1 - g) / (1 - g1)
     X1 = Q[10] * (beta - beta1) / (1 - beta1) + X1_beta1 * (1 - beta) / (1 - beta1)                                                 #first-order relation for displacement
     X2 = Q[11] * (beta - beta1) / (1 - beta1) / g + X2_beta1 * (1 - beta) / (1 - beta1) / g * g1                                    #first-order relation for velocity
     acc = Q[12] * (beta - beta1) / (1 - beta1) * pow(g , -2) + acc_beta1 * (1 - beta) / (1 - beta1) * pow(g , -2) * pow(g1 , 2)     #first-order relation for acceleration
-    F0 = Q[13] * (beta - beta1) / (1 - beta1) * alpha_rho * pow(g , -2) \
-        + F0_beta1 * (1 - beta) / (1 - beta1) * pow(g , -2) * pow(g1 , 2) * alpha_rho / alpha_rho1                                  #first-order relation for forcing term F0
-    # if using zeroth order force then F0 = Q[13] * Q[1] * alpha_rho * pow(g , -2)   
+    #F0 = Q[13] * (beta - beta1) / (1 - beta1) * alpha_rho * pow(g , -2) \
+     #   + F0_beta1 * (1 - beta) / (1 - beta1) * pow(g , -2) * pow(g1 , 2) * alpha_rho / alpha_rho1                                  #first-order relation for forcing term F0
+    F0 = Q[13] * Q[1] * alpha_rho * pow(g , -2)   
     return(np.array([T0 , Tend , kcoeff , c , mass , mu , theta , epsilon , X1 , X2 , acc , F0]))
 
 # a and b are functions defining the deterministic and stochastic vectors (respectively) utilised in the numerical methods to obtain the stocahstic realisations
@@ -104,8 +105,8 @@ X2_0 = ScaledQ(Q)[9]
 gravity = ScaledQ(Q)[10]
 F0 = ScaledQ(Q)[11]                                    
 Tbeta = (T[300] - T[0]) / Tsteps
-n = 200                                             #number of samples 
-n1 = 100                                            #time step Euler
+n = 500                                             #number of samples 
+n1 = 600                                            #time step Euler
 X1 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1])        #displacement u
 X2 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1])        #velocity v
 
@@ -129,10 +130,9 @@ for r in range(n):                              #multiple samples loop
         X1[r,k+1,0] = X1[r,k,n1]
         X2[r,k+1,0] = X2[r,k,n1]
 
-#no stochastic term
-for r in range(n):                              #multiple samples loop
-    X1[r,0,0] = X1_0                            #initial u
-    X2[r,0,0] = X2_0                            #initial v                                
+#no stochastic term                        
+    X1[n,0,0] = X1_0                            #initial u
+    X2[n,0,0] = X2_0                            #initial v                                
     for k in range(Tsteps):                     #loop for plot
         T[k + 1] = T[k] + Tbeta
         dt = (T[k + 1] - T[k]) / n1
@@ -140,15 +140,15 @@ for r in range(n):                              #multiple samples loop
         t[0] = T[k]
         for i in range(n1):                     #Euler loop (finite differences)
                 t[i + 1] = t[i] + dt
-                if X2[r,k,i] >= 0:
+                if X2[n,k,i] >= 0:
                     sign = 1
                 else:
                     sign = -1
-                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],t[i])[0] 
-                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],t[i])[1] 
+                X1[n,k,i + 1] = X1[n,k,i] + dt * a(X1[n,k,i],X2[n,k,i],t[i])[0] 
+                X2[n,k,i + 1] = X2[n,k,i] + dt * a(X1[n,k,i],X2[n,k,i],t[i])[1] 
   
-        X1[r,k+1,0] = X1[r,k,n1]
-        X2[r,k+1,0] = X2[r,k,n1]
+        X1[n,k+1,0] = X1[n,k,n1]
+        X2[n,k+1,0] = X2[n,k,n1]
     
 # save results in csv files
 
@@ -159,13 +159,13 @@ df2.to_csv('FullScaleCase1gX2.csv', encoding='utf-8')
 
 #load csv files
 
-df1 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleCase1gX1.csv') #'OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleX1Part1.csv'
+df1 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data New/FullScaleCase1gX1.csv') #'OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleX1Part1.csv'
 arr1=np.array(df1)
 arr1 = arr1[:,1:]
-df2 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/TrialScale1Case1gX1.csv')
+df2 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data New/TrialScale1Case1gX1.csv')
 arr2=np.array(df2)
 arr2 = arr2[:,1:]
-df3 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/TrialScale2Case1gX1.csv')
+df3 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data New/TrialScale2Case1gX1.csv')
 arr3=np.array(df3)
 arr3 = arr3[:,1:]
 
@@ -198,17 +198,17 @@ proj_fs = (arr3 - arr2 * ((1 - 1 / 3) / (1 - 2 / 3))) / ((1 / 3 - 2 / 3) / (1 - 
 
 # Error between the deterministic plot and the mean of the realisations in each time step.
 
-err_mean_fs = np.mean(arr1[:,:500], axis=1) - arr1[:,500]
-err_mean_ts1 = np.mean(arr2[:,:500], axis=1) - arr2[:,500]
-err_mean_ts2 = np.mean(arr3[:,:500], axis=1) - arr3[:,500]
-err_mean_proj = np.mean(proj_fs[:,:500], axis=1) - proj_fs[:,500]
+err_mean_fs = np.mean(arr1[:,:499], axis=1) - arr1[:,499]
+err_mean_ts1 = np.mean(arr2[:,:499], axis=1) - arr2[:,499]
+err_mean_ts2 = np.mean(arr3[:,:499], axis=1) - arr3[:,499]
+err_mean_proj = np.mean(proj_fs[:,:499], axis=1) - proj_fs[:,499]
 
 # Standard deviation of the spaces and the full scale projection
 
-std_sim_fs = np.std(arr1[:,:500],axis=1)
-std_sim_ts1 = np.std(arr2[:,:500],axis=1)
-std_sim_ts2 = np.std(arr3[:,:500],axis=1)
-std_sim_proj = np.std(proj_fs[:,:500],axis=1)
+std_sim_fs = np.std(arr1[:,:499],axis=1)
+std_sim_ts1 = np.std(arr2[:,:499],axis=1)
+std_sim_ts2 = np.std(arr3[:,:499],axis=1)
+std_sim_proj = np.std(proj_fs[:,:499],axis=1)
 
 # Output of the results, rows are each space and columns are mean absolute error, max abs error, std of errors, mean of standard deviation of realisations and std of the array of std
 
@@ -359,4 +359,29 @@ ax.plot(T, arr1[:,500], color='blue')
 fig.colorbar(line_collection, label="full scale realizations")
 #ax.set_title("Line Collection with mapped colors")
 plt.savefig('Full Scale Means and Variance.png', dpi=300)
+plt.show()
+
+#Plot with means of full scale and projection with error bands
+
+std_dis_fs = np.std(arr1[:,:499],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+std_dis_proj = np.std(proj_fs[:,:499],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+
+B1 = np.stack((T1, arr1[:,500] + std_dis_fs), axis=1) # plot of the mean + 1 sd (using sd vector not average)
+B2 = np.stack((T1, arr1[:,500] - std_dis_fs), axis=1)
+B3 = np.stack((T1, arr1[:,500] + 2 * std_dis_fs), axis=1) # plot of the mean + 2 sd (using sd vector not average)
+B4 = np.stack((T1, arr1[:,500] - 2 * std_dis_fs), axis=1)
+B5 = np.stack((T1, proj_fs[:,500] + std_dis_proj), axis=1) # same as before but for the projected values
+B6 = np.stack((T1, proj_fs[:,500] - std_dis_proj), axis=1)
+B7 = np.stack((T1, proj_fs[:,500] + 2 * std_dis_proj), axis=1)
+B8 = np.stack((T1, proj_fs[:,500] - 2 * std_dis_proj), axis=1)
+
+collection = [ B1, B2, B3, B4, B5, B6, B7, B8]
+fig, ax = plt.subplots(figsize=(10,5))
+ax.set_xlim(0, 100)
+ax.set_ylim(-60, 100)
+line_collection = LineCollection(collection, colors=['orange','orange','y','y','r','r','g','g'], linestyle='dashed',linewidths=[1.5,1.5,0.8,0.8,1.5,1.5,.8,.8])
+ax.add_collection(line_collection)
+ax.plot(T1, arr1[:,500], color='black')   # plot of the means
+ax.plot(T1, proj_fs[:,500], color='blue')
+plt.savefig('FullScalevsProjectionErrorBands.png', dpi=300)
 plt.show()
