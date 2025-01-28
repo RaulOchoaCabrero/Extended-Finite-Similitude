@@ -37,7 +37,7 @@ kcoeff = 10000          #index 6, spring coefficient
 L = 0.000155761         #index 7, inductance
 mass = 0.4              #index 8, mass
 epsilon = 1             #index 9, amplitude and scaling parameter for Brownian term
-Xamp = 0.0003             #index 14, displacement amplitude
+Xamp = 0.0001             #index 14, displacement amplitude
 #C = 0.099              capacitance 
 X1_0 = 0.099            #index 10, initial displacement
 X2_0 = 1                #index 11, intial velocity
@@ -67,7 +67,7 @@ def ScaledQ(Q):
     Tend = Q[3] * g
     kcoeff = alpha_rho * g ** (-2) * Q[6]               #scaling of spring coefficient
     mass = alpha_rho * Q[8]                             #scaling of mass
-    epsilon = Q[9] * g                                  #scaling of epsilon/Browninan term dB
+    epsilon = Q[9] * g                                 #scaling of epsilon/Browninan term dB
     X1 = Q[10] * (beta - beta1) / (1 - beta1) + X1_beta1 * (1 - beta) / (1 - beta1)                     #scaling of displacement (first-order)
     X2 = Q[11] * (beta - beta1) / (1 - beta1) / g + X2_beta1 * (1 - beta) / (1 - beta1) / g * g1        #scaling of velocity
     X3 = Q[12] / alpha_G / g                            #scaling of charge (zeroth-order)
@@ -115,8 +115,8 @@ T = np.zeros(Tsteps + 1)                    #time array of the tbetas
 T[0] = T0
 T[300] = Tend                                  
 Tbeta = (T[300] - T[0]) / Tsteps
-n = 200                                             #number of samples 
-n1 = 100                                            #time step Euler
+n = 500                                             #number of samples 
+n1 = 600                                            #time step Euler
 X1 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1])        #displacement u
 X2 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1])        #velocity v
 X3 = np.zeros([n + 1 , Tsteps + 1 , n1 + 1]) 
@@ -145,12 +145,11 @@ for r in range(n):                              #multiple samples loop
         X4[r,k+1,0] = X4[r,k,n1]
 
 
-#no stochastic term
-for r in range(n):                              #multiple samples loop
-    X1[r,0,0] = X1_0                            #initial u
-    X2[r,0,0] = X2_0                            #initial v 
-    X3[r,0,0] = X3_0 
-    X4[r,0,0] = X4_0                                
+#no stochastic term                              #multiple samples loop
+    X1[n,0,0] = X1_0                            #initial u
+    X2[n,0,0] = X2_0                            #initial v 
+    X3[n,0,0] = X3_0 
+    X4[n,0,0] = X4_0                                
     for k in range(Tsteps):                     #loop for plot
         T[k + 1] = T[k] + Tbeta
         dt = (T[k + 1] - T[k]) / n1
@@ -158,15 +157,15 @@ for r in range(n):                              #multiple samples loop
         t[0] = T[k]
         for i in range(n1):                     #Euler loop (finite differences)
                 t[i + 1] = t[i] + dt
-                X1[r,k,i + 1] = X1[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[0] 
-                X2[r,k,i + 1] = X2[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[1] 
-                X3[r,k,i + 1] = X3[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[2] 
-                X4[r,k,i + 1] = X4[r,k,i] + dt * a(X1[r,k,i],X2[r,k,i],X3[r,k,i],X4[r,k,i],t[i])[3] 
+                X1[n,k,i + 1] = X1[n,k,i] + dt * a(X1[n,k,i],X2[n,k,i],X3[n,k,i],X4[n,k,i],t[i])[0] 
+                X2[n,k,i + 1] = X2[n,k,i] + dt * a(X1[n,k,i],X2[n,k,i],X3[n,k,i],X4[n,k,i],t[i])[1] 
+                X3[n,k,i + 1] = X3[n,k,i] + dt * a(X1[n,k,i],X2[n,k,i],X3[n,k,i],X4[n,k,i],t[i])[2] 
+                X4[n,k,i + 1] = X4[n,k,i] + dt * a(X1[n,k,i],X2[n,k,i],X3[n,k,i],X4[n,k,i],t[i])[3] 
     
-        X1[r,k+1,0] = X1[r,k,n1]
-        X2[r,k+1,0] = X2[r,k,n1]
-        X3[r,k+1,0] = X3[r,k,n1]
-        X4[r,k+1,0] = X4[r,k,n1]
+        X1[n,k+1,0] = X1[n,k,n1]
+        X2[n,k+1,0] = X2[n,k,n1]
+        X3[n,k+1,0] = X3[n,k,n1]
+        X4[n,k+1,0] = X4[n,k,n1]
     
 # save results in csv files
 
@@ -181,13 +180,13 @@ df4.to_csv('FullScaleCase2gX4.csv', encoding='utf-8')
 
 #load csv files
 
-df1 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleCase2gX1.csv') #'OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleX1Part1.csv'
+df1 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data New/FullScaleCase2gX1.csv') #'OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/FullScaleX1Part1.csv'
 arr1=np.array(df1)
 arr1 = arr1[:,1:]
-df2 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/TrialScale1Case2gX1.csv')
+df2 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data New/TrialScale1Case2gX1.csv')
 arr2=np.array(df2)
 arr2 = arr2[:,1:]
-df3 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data/TrialScale2Case2gX1.csv')
+df3 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Research Projects/Scaling Uncertainty/Data New/TrialScale2Case2gX1.csv')
 arr3=np.array(df3)
 arr3 = arr3[:,1:]
 
@@ -298,7 +297,7 @@ fig = px.line(df1, x=Tp, y='500') #deterministic plot
 plot(fig)
 
 sample1 = random.randint(0,499); sample2= random.randint(0,499); sample3 = random.randint(0,499)
-T1 = np.linspace(0,100,301)
+T1 = np.linspace(0,Tend,301)
 T2 = np.linspace(0,100 * 2 / 3, 301)
 T3 = np.linspace(0,100 / 3, 301)
 A1 = np.stack((T1, arr1[:,sample1]), axis=1)
@@ -327,11 +326,11 @@ y = arr1[:,500]
 fig, ax = plt.subplots()
 ax.plot(x, y, "k")
 
-fs_aprox = (arr3 - arr2 * ((1 - 1 / 3) / (1 - 2 / 3))) / ((1 / 3 - 2 / 3) / (1 - 2 / 3))
+fs_aprox = (arr3 - arr2 * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))
 arcs = [np.column_stack([T1, fs_aprox[:,r]]) for r in range(0,500)]
 fig, ax = plt.subplots(figsize=(10, 5))
-ax.set_xlim(0, 100)
-ax.set_ylim(-65, 100)
+ax.set_xlim(0, Tend)
+ax.set_ylim(-.1, .1)
 line_collection = LineCollection(arcs, array=range(0,500), cmap='copper', alpha=0.2)
 ax.add_collection(line_collection)
 ax.plot(T1, arr1[:,sample3], color='blue')
@@ -400,4 +399,56 @@ ax.plot(T, arr1[:,500], color='blue')
 fig.colorbar(line_collection, label="full scale realizations")
 #ax.set_title("Line Collection with mapped colors")
 plt.savefig('Full Scale Means and Variance.png', dpi=300)
+plt.show()
+
+# error band plots
+
+std_dis_fs = np.std(arr1[:,:499],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+std_dis_proj = np.std(proj_fs[:,:499],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+
+B1 = np.stack((T1, arr1[:,500] + std_dis_fs), axis=1) # plot of the mean + 1 sd (using sd vector not average)
+B2 = np.stack((T1, arr1[:,500] - std_dis_fs), axis=1)
+B3 = np.stack((T1, arr1[:,500] + 2 * std_dis_fs), axis=1) # plot of the mean + 2 sd (using sd vector not average)
+B4 = np.stack((T1, arr1[:,500] - 2 * std_dis_fs), axis=1)
+B5 = np.stack((T1, proj_fs[:,500] + std_dis_proj), axis=1) # same as before but for the projected values
+B6 = np.stack((T1, proj_fs[:,500] - std_dis_proj), axis=1)
+B7 = np.stack((T1, proj_fs[:,500] + 2 * std_dis_proj), axis=1)
+B8 = np.stack((T1, proj_fs[:,500] - 2 * std_dis_proj), axis=1)
+
+collection = [ B1, B2, B3, B4, B5, B6, B7, B8]
+fig, ax = plt.subplots(figsize=(10,5))
+ax.set_xlim(0, Tend)
+ax.set_ylim(-.1, .1)
+line_collection = LineCollection(collection, colors=['orange','orange','y','y','r','r','g','g'], linestyle='dashed',linewidths=[1.5,1.5,0.8,0.8,1.5,1.5,.8,.8])
+ax.add_collection(line_collection)
+ax.plot(T1, arr1[:,500], color='black')   # plot of the means
+ax.plot(T1, proj_fs[:,500], color='blue')
+plt.savefig('FullScalevsProjectionErrorBands.png', dpi=300)
+plt.show()
+
+# phase plots with displacement fixed i.e., mean displacement
+
+proj_vel_fs = (arr6 - arr5 * ((1 - 1/4) / (1 - 1 / 2)) / (1 / 4) * (1 / 2)) / ((1 / 4 - 1 / 2) / (1 - 1 / 2) / (1 / 4)) 
+
+std_vel_fs = np.std(arr4[:,:499],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+std_vel_proj = np.std(proj_vel_fs[:,:499],axis=1) #to check it is the correct axis, np.shape(np.std(vel_fs[:,:500],axis=1))
+
+B1 = np.stack((arr1[:,500], arr4[:,500] + std_vel_fs), axis=1) # plot of the mean + 1 sd (using sd vector not average)
+B2 = np.stack((arr1[:,500], arr4[:,500] - std_vel_fs), axis=1)
+B3 = np.stack((arr1[:,500], arr4[:,500] + 2 * std_vel_fs), axis=1) # plot of the mean + 2 sd (using sd vector not average)
+B4 = np.stack((arr1[:,500], arr4[:,500] - 2 * std_vel_fs), axis=1)
+B5 = np.stack((arr1[:,500], proj_vel_fs[:,500] + std_vel_proj), axis=1) # same as before but for the projected values
+B6 = np.stack((arr1[:,500], proj_vel_fs[:,500] - std_vel_proj), axis=1)
+B7 = np.stack((arr1[:,500], proj_vel_fs[:,500] + 2 * std_vel_proj), axis=1)
+B8 = np.stack((arr1[:,500], proj_vel_fs[:,500] - 2 * std_vel_proj), axis=1)
+
+collection = [ B1, B2, B3, B4, B5, B6, B7, B8]
+fig, ax = plt.subplots(figsize=(10,7))
+ax.set_xlim(-.1, .1)
+ax.set_ylim(-16, 16)
+line_collection = LineCollection(collection, colors=['orange','orange','y','y','r','r','g','g'], linestyle='dashed',linewidths=[1.5,1.5,0.8,0.8,1.5,1.5,.8,.8])
+ax.add_collection(line_collection)
+ax.plot(arr1[:,500], arr4[:,500], color='black')   # plot of the means
+ax.plot(arr1[:,500], proj_vel_fs[:,500], color='blue')
+plt.savefig('FullScalevsProjectionErrorBands.png', dpi=300)
 plt.show()
