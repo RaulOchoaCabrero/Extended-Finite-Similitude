@@ -190,10 +190,22 @@ df3 = pd.read_csv('C:/Users/raulo/OneDrive - MMU/Documents/Documents Raul/Resear
 arr3=np.array(df3)
 arr3 = arr3[:,1:]
 
+# Projection of the two trial spaces
+
+proj_fs = (arr3 - arr2 * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))
+
 # Analysis of the error between the full scale space and the space projection of the two trial spaces
 
 Err = arr1 - (arr3 - arr2 * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))                              #error between stochastic realisations
 ErrDet = arr1[:,500] - (arr3[:,500] - arr2[:,500] * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))      #error between deterministic parts
+
+MRange = np.max(arr1) + np.max(abs(arr1))
+for i in range(301):
+    for j in range(501):
+        if abs(arr1[i,j]) <= 0.005 * MRange:
+            arr1[i,j] = 0.005 * MRange
+            
+PErr = (arr1 - proj_fs) / arr1
 
 # Statistical analysis of errors
 
@@ -213,16 +225,15 @@ std_sim = np.std(arr1[:,:499],axis=1)
 np.mean(std_sim)
 np.std(std_sim)
 
-# Projection of the two trial spaces
-
-proj_fs = (arr3 - arr2 * ((1 - 1 / 4) / (1 - 1 / 2))) / ((1 / 4 - 1 / 2) / (1 - 1 / 2))
-
 # Error between the deterministic plot and the mean of the realisations in each time step.
 
 err_mean_fs = np.mean(arr1[:,:500], axis=1) - arr1[:,500]
 err_mean_ts1 = np.mean(arr2[:,:500], axis=1) - arr2[:,500]
 err_mean_ts2 = np.mean(arr3[:,:500], axis=1) - arr3[:,500]
 err_mean_proj = np.mean(proj_fs[:,:500], axis=1) - proj_fs[:,500]
+
+err_mean_fs = (np.mean(arr1[:,:500], axis=1) - arr1[:,500]) / arr1[:,500]
+err_mean_proj = (np.mean(proj_fs[:,:500], axis=1) - proj_fs[:,500]) / proj_fs[:,500]
 
 # Standard deviation of the spaces and the full scale projection
 
